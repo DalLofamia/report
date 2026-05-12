@@ -2,6 +2,12 @@
   "name": "app",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "18.x"
+  },
+  "workspaces": [
+    "server"
+  ],
   "main": "electron/main.js",
   "homepage": "./",
   "dependencies": {
