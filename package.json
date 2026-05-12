@@ -2,22 +2,39 @@
   "name": "app",
   "version": "0.1.0",
   "private": true,
+  "main": "electron/main.js",
+  "homepage": "./",
   "dependencies": {
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^13.5.0",
+    "electron-is-dev": "^1.0.1",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
+    "react-router-dom": "^6.20.0",
     "react-scripts": "5.0.1",
+    "serve": "^14.2.6",
     "web-vitals": "^2.1.4"
   },
+  "devDependencies": {
+    "concurrently": "^7.6.0",
+    "electron": "27.0.0",
+    "electron-builder": "^24.6.4",
+    "wait-on": "^7.0.1"
+  },
   "scripts": {
-    "start": "react-scripts start",
+    "start": "node scripts/start-all.js",
+    "start:client": "react-scripts start",
+    "start:server": "npm start --prefix server",
+    "start:electron": "concurrently \"npm run start:client\" \"npm run start:server\" \"wait-on http://localhost:3000 && electron .\"",
     "build": "react-scripts build",
+    "start:production": "serve -s build -l 3000",
+    "build:electron": "npm run build && electron-builder",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
+  "proxy": "http://localhost:5000",
   "eslintConfig": {
     "extends": [
       "react-app",
@@ -35,5 +52,31 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "build": {
+    "appId": "com.app.projecttracker",
+    "productName": "Project Tracker",
+    "files": [
+      "build/**/*",
+      "electron/**/*",
+      "server/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
   }
 }
