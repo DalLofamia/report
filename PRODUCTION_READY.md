@@ -172,10 +172,10 @@ REACT_APP_API_BASE_URL=https://your-domain.com
 - ✅ Setup in `.env` with `DB_PATH`
 - ⚠️ Limitation: Not ideal for multi-server or serverless
 
-### For Large Scale (Optional Future)
-- Consider PostgreSQL or MySQL
-- Migrate data using database migration tools
-- Update server connection code
+### For Large Scale
+- MySQL is now supported through `MYSQL_HOST` or `MYSQL_URL`
+- Use persistent hosted MySQL for multi-user production deployments
+- Migrate data using your preferred database migration/export tools
 
 ## Next Steps
 
