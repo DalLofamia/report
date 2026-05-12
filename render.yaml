@@ -14,7 +14,7 @@ services:
       - key: UPLOADS_DIR
         value: /var/data/uploads
       - key: ALLOWED_ORIGINS
-        value: https://project-tracker-web.onrender.com
+        value: https://*.netlify.app,https://project-tracker-web.onrender.com
     disk:
       name: data
       mountPath: /var/data
