@@ -1,20 +1,21 @@
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
-const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const { PDFParse } = require('pdf-parse');
 const { createWorker } = require('tesseract.js');
+const { createDatabase } = require('./db');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Database path configuration
+// Database configuration
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'projects.db');
 const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, 'uploads');
+const db = createDatabase({ sqlitePath: DB_PATH });
 
 // Ensure uploads directory exists
 if (!fs.existsSync(UPLOADS_DIR)) {
@@ -164,18 +165,132 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', message: 'Server is running' });
 });
 
-// Database setup
-const dbPath = DB_PATH;
-const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
+db.ready
+  .then(async () => {
+    console.log(db.isMySQL ? 'Connected to MySQL database' : 'Connected to SQLite database');
+    if (db.isMySQL) {
+      await initializeMySqlDatabase();
+    } else {
+      initializeDatabase();
+    }
+    startServer();
+  })
+  .catch((err) => {
     console.error('Error opening database:', err);
     process.exit(1);
-  } else {
-    console.log('Connected to SQLite database');
-    initializeDatabase();
-    startServer();
-  }
-});
+  });
+
+function runSql(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.run(sql, params, function (err) {
+      if (err) {
+        reject(err);
+        return;
+      }
+
+      resolve(this);
+    });
+  });
+}
+
+async function initializeMySqlDatabase() {
+  await runSql(`
+    CREATE TABLE IF NOT EXISTS projects (
+      id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      companyName TEXT,
+      projectRequirements TEXT,
+      businessNameLocation TEXT,
+      purchasedOrderNumber TEXT,
+      contractPerson TEXT,
+      contactNumber TEXT,
+      totalContractPrice DECIMAL(12,2) NOT NULL,
+      downPayment DECIMAL(12,2) NOT NULL,
+      progress1 DECIMAL(12,2) DEFAULT 0,
+      progress2 DECIMAL(12,2) DEFAULT 0,
+      progress3 DECIMAL(12,2) DEFAULT 0,
+      progress4 DECIMAL(12,2) DEFAULT 0,
+      progress5 DECIMAL(12,2) DEFAULT 0,
+      status VARCHAR(20) NOT NULL DEFAULT 'Ongoing',
+      year INT DEFAULT 2026,
+      month INT DEFAULT 1,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )
+  `);
+
+  await runSql(`
+    CREATE TABLE IF NOT EXISTS subcontractors (
+      id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      subcontractor TEXT NOT NULL,
+      contactPerson TEXT,
+      contactNumber TEXT,
+      totalContractPrice DECIMAL(12,2) NOT NULL,
+      downPayment DECIMAL(12,2) NOT NULL,
+      progress1 DECIMAL(12,2) DEFAULT 0,
+      progress2 DECIMAL(12,2) DEFAULT 0,
+      progress3 DECIMAL(12,2) DEFAULT 0,
+      progress4 DECIMAL(12,2) DEFAULT 0,
+      progress5 DECIMAL(12,2) DEFAULT 0,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )
+  `);
+
+  await runSql(`
+    CREATE TABLE IF NOT EXISTS inventory_items (
+      id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      itemName VARCHAR(255) NOT NULL,
+      unit VARCHAR(100),
+      quantity DECIMAL(12,2) DEFAULT 0,
+      location VARCHAR(255),
+      remarks TEXT,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )
+  `);
+
+  await runSql(`
+    CREATE TABLE IF NOT EXISTS purchases (
+      id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      purchaseName VARCHAR(255) NOT NULL,
+      purchaseDate VARCHAR(50),
+      amount DECIMAL(12,2) DEFAULT 0,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )
+  `);
+
+  await runSql(`
+    CREATE TABLE IF NOT EXISTS accounting_entries (
+      id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      entryName VARCHAR(255) NOT NULL,
+      entryDate VARCHAR(50),
+      particulars TEXT,
+      debit DECIMAL(12,2) DEFAULT 0,
+      credit DECIMAL(12,2) DEFAULT 0,
+      payment DECIMAL(12,2) DEFAULT 0,
+      paymentMethod VARCHAR(100) NOT NULL DEFAULT '',
+      balance DECIMAL(12,2) DEFAULT 0,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )
+  `);
+
+  await runSql(`
+    CREATE TABLE IF NOT EXISTS invoices (
+      id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      invoiceName VARCHAR(255) NOT NULL,
+      invoiceDate VARCHAR(50),
+      amount DECIMAL(12,2) DEFAULT 0,
+      status VARCHAR(20) DEFAULT 'Draft',
+      filePath TEXT,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )
+  `);
+
+  backfillInvoiceAmounts();
+}
 
 // Initialize database tables with proper sequencing
 function initializeDatabase() {
