@@ -1,5 +1,3 @@
-const path = require('path');
-const sqlite3 = require('sqlite3').verbose();
 const mysql = require('mysql2/promise');
 
 // Helper to convert SQLite PRAGMA queries to MySQL INFORMATION_SCHEMA queries
@@ -109,54 +107,6 @@ function wrapCallbackResult(callback, result) {
   }
 }
 
-function createSqliteDatabase(dbPath) {
-  let resolveReady;
-  let rejectReady;
-
-  const ready = new Promise((resolve, reject) => {
-    resolveReady = resolve;
-    rejectReady = reject;
-  });
-
-  const sqliteDb = new sqlite3.Database(dbPath, (err) => {
-    if (err) {
-      rejectReady(err);
-      return;
-    }
-
-    resolveReady();
-  });
-
-  return {
-    isMySQL: false,
-    ready,
-    run(sql, params = [], callback) {
-      sqliteDb.run(sql, params, function (err) {
-        if (typeof callback === 'function') {
-          if (err) {
-            callback(err);
-            return;
-          }
-
-          callback.call(this, null);
-        }
-      });
-    },
-    get(sql, params = [], callback) {
-      sqliteDb.get(sql, params, callback);
-    },
-    all(sql, params = [], callback) {
-      sqliteDb.all(sql, params, callback);
-    },
-    serialize(callback) {
-      sqliteDb.serialize(callback);
-    },
-    close(callback) {
-      sqliteDb.close(callback);
-    },
-  };
-}
-
 function createMySqlDatabase() {
   const mysqlConfig = resolveMySqlConfig();
   if (!mysqlConfig) {
@@ -252,12 +202,10 @@ function createMySqlDatabase() {
 
 function createDatabase(options = {}) {
   const mysqlConfig = resolveMySqlConfig();
-  if (mysqlConfig) {
-    return createMySqlDatabase();
+  if (!mysqlConfig) {
+    throw new Error('MySQL is required. Please set MYSQL_HOST or MYSQL_URL environment variables.');
   }
-
-  const sqlitePath = options.sqlitePath || path.join(__dirname, 'projects.db');
-  return createSqliteDatabase(sqlitePath);
+  return createMySqlDatabase();
 }
 
 module.exports = {
