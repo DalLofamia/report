@@ -127,8 +127,23 @@ const corsOptions = {
       }
     }
 
+    const isAllowedOrigin = allowedOrigins.some((allowedOrigin) => {
+      if (allowedOrigin === '*') {
+        return true;
+      }
+
+      if (allowedOrigin.includes('*')) {
+        const escapedPattern = allowedOrigin
+          .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+          .replace(/\\\*/g, '.*');
+        return new RegExp(`^${escapedPattern}$`, 'i').test(origin);
+      }
+
+      return allowedOrigin === origin;
+    });
+
     // Check if origin is allowed
-    if (allowedOrigins.includes(origin)) {
+    if (isAllowedOrigin) {
       callback(null, true);
     } else {
       // Log rejection for debugging
