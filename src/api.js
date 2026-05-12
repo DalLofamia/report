@@ -5,7 +5,16 @@ function getAPIBaseUrl() {
     return process.env.REACT_APP_API_BASE_URL.replace(/\/$/, '');
   }
 
-  // 2. In production build, use same host as frontend if API_BASE_URL not set
+  // 2. In production on Netlify, fall back to the Render backend used by this project
+  if (process.env.NODE_ENV === 'production' && typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+
+    if (/\.netlify\.app$/i.test(hostname)) {
+      return 'https://project-tracker-api.onrender.com';
+    }
+  }
+
+  // 3. In production build, use same host as frontend if API_BASE_URL not set
   if (process.env.NODE_ENV === 'production' && typeof window !== 'undefined') {
     const protocol = window.location.protocol;
     const hostname = window.location.hostname;
@@ -22,7 +31,7 @@ function getAPIBaseUrl() {
     return `${protocol}//${hostname}`;
   }
 
-  // 3. Default to localhost for development
+  // 4. Default to localhost for development
   return 'http://localhost:5000';
 }
 
