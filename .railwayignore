@@ -1,0 +1,19 @@
+# .railwayignore - tells Railway to ignore these files when deploying
+
+# Frontend files (not needed for backend deployment)
+src/
+public/
+build/
+node_modules/
+package-lock.json
+.vercelignore
+DEPLOYMENT.md
+PRODUCTION_DEPLOYMENT.md
+PRODUCTION_READY.md
+SETUP.md
+ELECTRON_SETUP.md
+DEPLOY_QUICK_START.md
+DEPLOYMENT_READY.md
+RENDER_DEPLOYMENT.md
+*.env.local
+*.env.*.local
