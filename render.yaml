@@ -13,6 +13,8 @@ services:
         value: /var/data/projects.db
       - key: UPLOADS_DIR
         value: /var/data/uploads
+      - key: ALLOWED_ORIGINS
+        value: https://project-tracker-web.onrender.com
     disk:
       name: data
       mountPath: /var/data
@@ -25,9 +27,6 @@ services:
     startCommand: npx serve -s build -l 3000
     envVars:
       - key: REACT_APP_API_BASE_URL
-        fromService:
-          name: project-tracker-api
-          property: url
-    routes:
-      - type: http
-        path: /
+        value: https://project-tracker-api.onrender.com
+      - key: NODE_ENV
+        value: production
