@@ -121,7 +121,41 @@ function createMySqlDatabase() {
     timezone: 'Z',
   });
 
-  const ready = pool.query('SELECT 1');
+  // Enhanced error handling for pool connection
+  const ready = pool.query('SELECT 1').catch((err) => {
+    const errorMsg = `
+╔════════════════════════════════════════════════════════════════════════════╗
+║                    MYSQL CONNECTION ERROR                                 ║
+╠════════════════════════════════════════════════════════════════════════════╣
+║ Could not connect to MySQL database                                       ║
+║                                                                            ║
+║ Error Details:                                                            ║
+║   ${err.code}: ${err.message}                                             ║
+║                                                                            ║
+║ Check these settings in your .env file:                                   ║
+║   MYSQL_HOST=${mysqlConfig.host}                                         ║
+║   MYSQL_PORT=${mysqlConfig.port}                                         ║
+║   MYSQL_USER=${mysqlConfig.user}                                         ║
+║                                                                            ║
+║ Common Solutions:                                                         ║
+║   1. MySQL server is not running                                         ║
+║   2. Host/Port is incorrect                                              ║
+║   3. Username/Password is incorrect                                      ║
+║   4. Database '${mysqlConfig.database}' doesn't exist                    ║
+║                                                                            ║
+║ To start MySQL locally with Docker:                                      ║
+║   docker run --name mysql -e MYSQL_ROOT_PASSWORD=password \\             ║
+║     -p 3306:3306 -d mysql:8.0                                           ║
+║                                                                            ║
+║ Then create the database:                                                ║
+║   docker exec -it mysql mysql -u root -ppassword \\                     ║
+║     -e "CREATE DATABASE project_tracker;"                               ║
+║                                                                            ║
+║ See MYSQL_SETUP.md for more help                                         ║
+╚════════════════════════════════════════════════════════════════════════════╝
+    `.trim();
+    throw new Error(errorMsg);
+  });
 
   return {
     isMySQL: true,
@@ -203,7 +237,30 @@ function createMySqlDatabase() {
 function createDatabase(options = {}) {
   const mysqlConfig = resolveMySqlConfig();
   if (!mysqlConfig) {
-    throw new Error('MySQL is required. Please set MYSQL_HOST or MYSQL_URL environment variables.');
+    const errorMessage = `
+╔════════════════════════════════════════════════════════════════════════════╗
+║                    MYSQL CONFIGURATION ERROR                              ║
+╠════════════════════════════════════════════════════════════════════════════╣
+║ MySQL is required but not configured. Please set one of:                  ║
+║                                                                            ║
+║ Option 1 (Connection URL):                                               ║
+║   MYSQL_URL=mysql://user:password@host:3306/database                     ║
+║                                                                            ║
+║ Option 2 (Individual parameters):                                        ║
+║   MYSQL_HOST=localhost                                                   ║
+║   MYSQL_PORT=3306                                                        ║
+║   MYSQL_USER=root                                                        ║
+║   MYSQL_PASSWORD=password                                                ║
+║   MYSQL_DATABASE=project_tracker                                         ║
+║                                                                            ║
+║ Quick Setup with Docker:                                                 ║
+║   docker run --name mysql -e MYSQL_ROOT_PASSWORD=password \\             ║
+║     -p 3306:3306 -d mysql:8.0                                           ║
+║                                                                            ║
+║ See .env.example and MYSQL_SETUP.md for detailed instructions            ║
+╚════════════════════════════════════════════════════════════════════════════╝
+    `.trim();
+    throw new Error(errorMessage);
   }
   return createMySqlDatabase();
 }
