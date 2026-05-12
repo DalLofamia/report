@@ -1,0 +1,222 @@
+.home-container {
+  min-height: 100vh;
+  background: var(--gradient-radial), var(--gradient-dark);
+  background-attachment: fixed;
+  padding: 56px 24px 64px;
+}
+
+.home-header {
+  text-align: center;
+  margin: 0 auto 40px;
+  max-width: 940px;
+  padding: 34px 18px;
+  background: linear-gradient(160deg, rgba(23, 56, 103, 0.74), rgba(10, 31, 65, 0.86));
+  border: 1px solid rgba(124, 181, 255, 0.32);
+  border-radius: 28px;
+  box-shadow: 0 12px 30px rgba(3, 10, 24, 0.5);
+  backdrop-filter: blur(4px);
+  transition: all var(--transition);
+}
+
+.home-header h1 {
+  font-size: clamp(40px, 4.5vw, 64px);
+  color: #f4fbff;
+  margin: 0 0 12px;
+  letter-spacing: 0.015em;
+}
+
+.home-header p {
+  font-size: 17px;
+  color: #9cc0e8;
+  margin: 0;
+}
+
+.home-chip-row {
+  margin-top: 20px;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.home-chip {
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(16, 196, 255, 0.16);
+  color: #dff5ff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  transition: all var(--transition);
+}
+
+.home-chip:hover {
+  background: rgba(16, 196, 255, 0.26);
+  transform: translateY(-1px);
+}
+
+.modules-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 28px;
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 10px;
+}
+
+.module-card {
+  background: linear-gradient(160deg, rgba(23, 56, 103, 0.72), rgba(10, 31, 65, 0.86));
+  border: 1.5px solid rgba(124, 181, 255, 0.32);
+  border-radius: 22px;
+  padding: 32px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--transition);
+  box-shadow: 0 12px 30px rgba(3, 10, 24, 0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  min-height: 200px;
+  justify-content: center;
+}
+
+.module-card:hover {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 20px 40px rgba(16, 196, 255, 0.25);
+  border-color: rgba(95, 204, 255, 0.6);
+}
+
+.module-card:active {
+  transform: translateY(-4px) scale(1.01);
+}
+
+.module-card.active {
+  background: linear-gradient(160deg, rgba(26, 64, 117, 0.8), rgba(12, 34, 68, 0.9));
+  border-color: rgba(95, 204, 255, 0.6);
+}
+
+.module-card.disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.module-icon {
+  font-size: 42px;
+  line-height: 1;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.home-dashboard-icon {
+  width: 44px;
+  height: 44px;
+  filter: drop-shadow(0 6px 10px rgba(30, 139, 255, 0.2));
+}
+
+.module-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: #f4fbff;
+  line-height: 1.4;
+}
+
+.module-description {
+  font-size: 12px;
+  color: #9cc0e8;
+  line-height: 1.45;
+  max-width: 190px;
+}
+
+@media (max-width: 1024px) {
+  .modules-grid {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+  }
+  
+  .module-card {
+    padding: 24px 18px;
+    min-height: 180px;
+  }
+}
+
+@media (max-width: 768px) {
+  .modules-grid {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+  }
+
+  .home-header h1 {
+    font-size: 36px;
+  }
+
+  .home-header p {
+    font-size: 15px;
+  }
+
+  .module-icon {
+    font-size: 38px;
+  }
+
+  .module-name {
+    font-size: 15px;
+  }
+
+  .module-description {
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 640px) {
+  .home-container {
+    padding: 40px 16px 48px;
+  }
+  
+  .home-header {
+    padding: 24px 12px;
+    margin-bottom: 32px;
+  }
+  
+  .modules-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  
+  .module-card {
+    padding: 20px 16px;
+    min-height: 160px;
+  }
+
+  .home-header h1 {
+    font-size: clamp(28px, 3vw, 36px);
+    margin-bottom: 8px;
+  }
+  
+  .home-header p {
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .modules-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .module-card {
+    padding: 22px 14px;
+    min-height: 140px;
+  }
+
+  .module-icon {
+    font-size: 34px;
+  }
+
+  .module-name {
+    font-size: 15px;
+  }
+}

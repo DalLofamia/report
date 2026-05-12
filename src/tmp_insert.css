@@ -1,0 +1,38 @@
+/* Temporary Insert Styles - To be merged into index.css */
+
+.btn-import {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0.5rem 0.875rem;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--primary), var(--primary-strong));
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all var(--transition-base);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-import:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-import:active {
+  transform: translateY(0);
+}
+
+.btn-import input {
+  position: absolute;
+  opacity: 0;
+  left: -9999px;
+  cursor: pointer;
+}
+
+.btn-import input:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
