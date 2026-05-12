@@ -12,9 +12,10 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Database configuration (MySQL required)
+// Database configuration (MySQL optional, SQLite fallback for local dev)
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'projects.db');
 const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, 'uploads');
-const db = createDatabase();
+const db = createDatabase({ sqlitePath: DB_PATH });
 
 // Ensure uploads directory exists
 if (!fs.existsSync(UPLOADS_DIR)) {
@@ -166,13 +167,26 @@ app.get('/health', (req, res) => {
 
 db.ready
   .then(async () => {
-    console.log('Connected to MySQL database');
-    await initializeMySqlDatabase();
+    console.log(db.isMySQL ? '✅ Connected to MySQL database' : '📦 Using SQLite database');
+    if (db.isMySQL) {
+      await initializeMySqlDatabase();
+    } else {
+      initializeDatabase();
+    }
     startServer();
   })
   .catch((err) => {
-    console.error('Error opening database:', err);
-    process.exit(1);
+    // If MySQL fails, silently fall back to SQLite
+    if (!db.isMySQL) {
+      // SQLite failed - this is a real error
+      console.error('Error opening SQLite database:', err);
+      process.exit(1);
+    }
+    // MySQL failed - fall back to SQLite for local development
+    console.warn('⚠️  MySQL connection failed, switching to SQLite...');
+    console.log('📦 Using SQLite for local development');
+    initializeDatabase();
+    startServer();
   });
 
 function runSql(sql, params = []) {
@@ -287,7 +301,128 @@ async function initializeMySqlDatabase() {
   backfillInvoiceAmounts();
 }
 
+// Initialize database for SQLite
+function initializeDatabase() {
+  db.run(`
+    CREATE TABLE IF NOT EXISTS projects (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      companyName TEXT,
+      projectRequirements TEXT,
+      businessNameLocation TEXT,
+      purchasedOrderNumber TEXT,
+      contractPerson TEXT,
+      contactNumber TEXT,
+      totalContractPrice REAL NOT NULL,
+      downPayment REAL NOT NULL,
+      progress1 REAL DEFAULT 0,
+      progress2 REAL DEFAULT 0,
+      progress3 REAL DEFAULT 0,
+      progress4 REAL DEFAULT 0,
+      progress5 REAL DEFAULT 0,
+      status TEXT DEFAULT 'Ongoing',
+      year INTEGER DEFAULT 2026,
+      month INTEGER DEFAULT 1,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `, (err) => {
+    if (err) console.error('Error creating projects table:', err);
+    else console.log('Projects table initialized');
+  });
 
+  db.run(`
+    CREATE TABLE IF NOT EXISTS subcontractors (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      subcontractor TEXT NOT NULL,
+      contactPerson TEXT,
+      contactNumber TEXT,
+      totalContractPrice REAL NOT NULL,
+      downPayment REAL NOT NULL,
+      progress1 REAL DEFAULT 0,
+      progress2 REAL DEFAULT 0,
+      progress3 REAL DEFAULT 0,
+      progress4 REAL DEFAULT 0,
+      progress5 REAL DEFAULT 0,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `, (err) => {
+    if (err) console.error('Error creating subcontractors table:', err);
+    else console.log('Subcontractors table initialized');
+  });
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS inventory_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      itemName TEXT NOT NULL,
+      unit TEXT,
+      quantity REAL DEFAULT 0,
+      location TEXT,
+      remarks TEXT,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `, (err) => {
+    if (err) console.error('Error creating inventory table:', err);
+    else console.log('Inventory table initialized');
+  });
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS purchases (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      purchaseName TEXT NOT NULL,
+      purchaseDate TEXT,
+      amount REAL DEFAULT 0,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `, (err) => {
+    if (err) console.error('Error creating purchases table:', err);
+    else console.log('Purchases table initialized');
+  });
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS accounting_entries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      entryName TEXT NOT NULL,
+      entryDate TEXT,
+      particulars TEXT,
+      debit REAL DEFAULT 0,
+      credit REAL DEFAULT 0,
+      payment REAL DEFAULT 0,
+      paymentMethod TEXT DEFAULT '',
+      balance REAL DEFAULT 0,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `, (err) => {
+    if (err) console.error('Error creating accounting table:', err);
+    else console.log('Accounting table initialized');
+  });
+
+  const uploadsDir = path.join(UPLOADS_DIR, 'invoices');
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS invoices (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      invoiceName TEXT NOT NULL,
+      invoiceDate TEXT,
+      amount REAL DEFAULT 0,
+      status TEXT DEFAULT 'Draft',
+      filePath TEXT,
+      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `, (err) => {
+    if (err) console.error('Error creating invoices table:', err);
+    else console.log('Invoices table initialized');
+  });
+
+  backfillInvoiceAmounts();
+}
 
 function backfillInvoiceAmounts() {
   db.all(

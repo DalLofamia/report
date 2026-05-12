@@ -1,3 +1,5 @@
+const path = require('path');
+const sqlite3 = require('sqlite3').verbose();
 const mysql = require('mysql2/promise');
 
 // Helper to convert SQLite PRAGMA queries to MySQL INFORMATION_SCHEMA queries
@@ -105,6 +107,55 @@ function wrapCallbackResult(callback, result) {
       null
     );
   }
+}
+
+function createSqliteDatabase(dbPath) {
+  let resolveReady;
+  let rejectReady;
+
+  const ready = new Promise((resolve, reject) => {
+    resolveReady = resolve;
+    rejectReady = reject;
+  });
+
+  const sqliteDb = new sqlite3.Database(dbPath, (err) => {
+    if (err) {
+      rejectReady(err);
+      return;
+    }
+
+    console.log('📦 Using SQLite database (Local Development)');
+    resolveReady();
+  });
+
+  return {
+    isMySQL: false,
+    ready,
+    run(sql, params = [], callback) {
+      sqliteDb.run(sql, params, function (err) {
+        if (typeof callback === 'function') {
+          if (err) {
+            callback(err);
+            return;
+          }
+
+          callback.call(this, null);
+        }
+      });
+    },
+    get(sql, params = [], callback) {
+      sqliteDb.get(sql, params, callback);
+    },
+    all(sql, params = [], callback) {
+      sqliteDb.all(sql, params, callback);
+    },
+    serialize(callback) {
+      sqliteDb.serialize(callback);
+    },
+    close(callback) {
+      sqliteDb.close(callback);
+    },
+  };
 }
 
 function createMySqlDatabase() {
@@ -236,33 +287,46 @@ function createMySqlDatabase() {
 
 function createDatabase(options = {}) {
   const mysqlConfig = resolveMySqlConfig();
-  if (!mysqlConfig) {
-    const errorMessage = `
-╔════════════════════════════════════════════════════════════════════════════╗
-║                    MYSQL CONFIGURATION ERROR                              ║
-╠════════════════════════════════════════════════════════════════════════════╣
-║ MySQL is required but not configured. Please set one of:                  ║
-║                                                                            ║
-║ Option 1 (Connection URL):                                               ║
-║   MYSQL_URL=mysql://user:password@host:3306/database                     ║
-║                                                                            ║
-║ Option 2 (Individual parameters):                                        ║
-║   MYSQL_HOST=localhost                                                   ║
-║   MYSQL_PORT=3306                                                        ║
-║   MYSQL_USER=root                                                        ║
-║   MYSQL_PASSWORD=password                                                ║
-║   MYSQL_DATABASE=project_tracker                                         ║
-║                                                                            ║
-║ Quick Setup with Docker:                                                 ║
-║   docker run --name mysql -e MYSQL_ROOT_PASSWORD=password \\             ║
-║     -p 3306:3306 -d mysql:8.0                                           ║
-║                                                                            ║
-║ See .env.example and MYSQL_SETUP.md for detailed instructions            ║
-╚════════════════════════════════════════════════════════════════════════════╝
-    `.trim();
-    throw new Error(errorMessage);
+  let currentDb = null;
+  
+  // Try MySQL first if configured
+  if (mysqlConfig) {
+    try {
+      const mysqlDb = createMySqlDatabase();
+      currentDb = mysqlDb;
+      
+      // Add MySQL fallback wrapper
+      const ready = mysqlDb.ready.catch((err) => {
+        console.warn('⚠️  MySQL connection failed:', err.code || 'Connection error');
+        console.log('💡 Falling back to SQLite for local development');
+        
+        // Switch to SQLite on MySQL failure
+        const sqlitePath = options.sqlitePath || path.join(__dirname, 'projects.db');
+        const sqliteDb = createSqliteDatabase(sqlitePath);
+        
+        // Replace all db methods with SQLite methods
+        currentDb.isMySQL = false;
+        currentDb.ready = sqliteDb.ready;
+        currentDb.run = sqliteDb.run;
+        currentDb.get = sqliteDb.get;
+        currentDb.all = sqliteDb.all;
+        currentDb.serialize = sqliteDb.serialize;
+        currentDb.close = sqliteDb.close;
+        currentDb.connection = null;
+        
+        return sqliteDb.ready;
+      });
+      
+      return Object.assign(currentDb, { ready });
+    } catch (err) {
+      console.warn('⚠️  MySQL error:', err.message);
+    }
   }
-  return createMySqlDatabase();
+  
+  // Use SQLite for local development
+  console.log('ℹ️  Using SQLite for local development');
+  const sqlitePath = options.sqlitePath || path.join(__dirname, 'projects.db');
+  return createSqliteDatabase(sqlitePath);
 }
 
 module.exports = {
