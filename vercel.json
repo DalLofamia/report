@@ -1,4 +1,0 @@
-{
-  "buildCommand": "npm install && npm install --prefix server",
-  "startCommand": "npm start --prefix server"
-}

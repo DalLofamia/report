@@ -38,6 +38,13 @@ const formatInvoiceDate = (rawDate) => {
 
 const getInvoiceSourceLabel = (invoice) => (invoice.filePath ? 'Imported file' : 'Manual entry');
 
+const getInvoiceStatusValue = (status) => {
+  const normalizedStatus = String(status || 'Ongoing').trim().toLowerCase();
+  return normalizedStatus === 'complete' ? 'Complete' : 'Ongoing';
+};
+
+const getInvoiceStatusClassName = (status) => `status-${getInvoiceStatusValue(status).toLowerCase()}`;
+
 function Invoices() {
   const navigate = useNavigate();
   const [invoices, setInvoices] = useState([]);
@@ -47,16 +54,30 @@ function Invoices() {
   const [previewError, setPreviewError] = useState('');
   const fileInputRef = useRef(null);
 
-  useEffect(() => {
-    fetchInvoices();
-  }, []);
+  // Get current year and month for default values
+  const currentDate = new Date();
+  const currentYear = currentDate.getFullYear();
+  const currentMonth = currentDate.getMonth() + 1;
 
-  const fetchInvoices = async (silent = false) => {
+  const [filterYear, setFilterYear] = useState(null);
+  const [filterMonth, setFilterMonth] = useState(null);
+  const [invoiceYear, setInvoiceYear] = useState(currentYear);
+  const [invoiceMonth, setInvoiceMonth] = useState(currentMonth);
+
+  useEffect(() => {
+    fetchInvoices(false, filterYear, filterMonth);
+  }, [filterYear, filterMonth]);
+
+  const fetchInvoices = async (silent = false, year = null, month = null) => {
     try {
       if (!silent) {
         setLoading(true);
       }
-      const res = await fetch(API_URL);
+      const queryParams = new URLSearchParams();
+      if (year !== null && year !== undefined && year !== '') queryParams.append('year', year);
+      if (month !== null && month !== undefined && month !== '') queryParams.append('month', month);
+      const url = queryParams.toString() ? `${API_URL}?${queryParams.toString()}` : API_URL;
+      const res = await fetch(url);
       if (!res.ok) throw new Error('Failed to load invoices');
       const data = await res.json();
       setInvoices(data);
@@ -77,10 +98,12 @@ function Invoices() {
       form.append('invoiceDate', '');
       form.append('amount', 0);
       form.append('status', 'Draft');
+      form.append('year', invoiceYear);
+      form.append('month', invoiceMonth);
 
       const res = await fetch(API_URL, { method: 'POST', body: form });
       if (!res.ok) throw new Error('Failed to create invoice');
-      await fetchInvoices();
+      await fetchInvoices(false, filterYear, filterMonth);
     } catch (err) {
       setError(err.message);
     }
@@ -91,6 +114,29 @@ function Invoices() {
       const res = await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete invoice');
       await fetchInvoices();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const updateInvoiceStatus = async (id, status) => {
+    try {
+      const invoice = invoices.find((item) => item.id === id);
+      if (!invoice) {
+        throw new Error('Invoice not found');
+      }
+
+      const form = new FormData();
+      form.append('invoiceName', invoice.invoiceName || 'Invoice');
+      form.append('invoiceDate', invoice.invoiceDate || '');
+      form.append('amount', invoice.amount || 0);
+      form.append('status', status);
+      form.append('year', invoice.year || invoiceYear);
+      form.append('month', invoice.month || invoiceMonth);
+
+      const res = await fetch(`${API_URL}/${id}`, { method: 'PUT', body: form });
+      if (!res.ok) throw new Error('Failed to update invoice status');
+      await fetchInvoices(true, filterYear, filterMonth);
     } catch (err) {
       setError(err.message);
     }
@@ -131,10 +177,12 @@ function Invoices() {
       form.append('invoiceDate', '');
       form.append('amount', 0);
       form.append('status', 'Draft');
+      form.append('year', invoiceYear);
+      form.append('month', invoiceMonth);
       form.append('file', file);
       const res = await fetch(API_URL, { method: 'POST', body: form });
       if (!res.ok) throw new Error('Failed to import invoice');
-      await fetchInvoices();
+      await fetchInvoices(false, filterYear, filterMonth);
     } catch (err) {
       setError(err.message);
     }
@@ -196,6 +244,74 @@ function Invoices() {
         </div>
       </div>
 
+      <div className="invoices-filters">
+        <div className="filter-group">
+          <label htmlFor="filterYear">Year:</label>
+          <select
+            id="filterYear"
+            className="filter-select"
+            value={filterYear ?? ''}
+            onChange={(e) => setFilterYear(e.target.value ? parseInt(e.target.value, 10) : null)}
+          >
+              <option value="">All Years</option>
+            {Array.from({ length: 10 }, (_, i) => 2026 + i).map((year) => (
+              <option key={year} value={year}>
+                {year}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="filter-group">
+          <label htmlFor="filterMonth">Month:</label>
+          <select
+            id="filterMonth"
+            className="filter-select"
+            value={filterMonth ?? ''}
+            onChange={(e) => setFilterMonth(e.target.value ? parseInt(e.target.value, 10) : null)}
+          >
+            <option value="">All Months</option>
+            {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => (
+              <option key={month} value={month}>
+                {new Date(2026, month - 1).toLocaleString('en-US', { month: 'long' })}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="filter-group">
+          <label htmlFor="invoiceYear">New Invoice Year:</label>
+          <select
+            id="invoiceYear"
+            className="filter-select"
+            value={invoiceYear}
+            onChange={(e) => setInvoiceYear(parseInt(e.target.value, 10))}
+          >
+            {Array.from({ length: 10 }, (_, i) => 2026 + i).map((year) => (
+              <option key={year} value={year}>
+                {year}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="filter-group">
+          <label htmlFor="invoiceMonth">New Invoice Month:</label>
+          <select
+            id="invoiceMonth"
+            className="filter-select"
+            value={invoiceMonth}
+            onChange={(e) => setInvoiceMonth(parseInt(e.target.value, 10))}
+          >
+            {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => (
+              <option key={month} value={month}>
+                {new Date(2026, month - 1).toLocaleString('en-US', { month: 'long' })}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       <p className="invoices-helper-text">Drag and drop PDF/screenshots into the chart area or use Import to add invoice documents.</p>
 
       <div className="invoices-chart" onDrop={onDrop} onDragOver={(e) => e.preventDefault()}>
@@ -226,13 +342,11 @@ function Invoices() {
 
       <div className="invoices-list">
         {invoices.map(inv => (
-          <div className="invoice-card" key={inv.id}>
+          <div className={`invoice-card ${getInvoiceStatusClassName(inv.status)}`} key={inv.id}>
             <div className="invoice-left">
               <div className="invoice-name" role="button" onClick={() => navigate(`/invoices/${inv.id}`)}>{inv.invoiceName}</div>
               <div className="invoice-details">
                 <span>{formatInvoiceDate(inv.invoiceDate)}</span>
-                <span className="invoice-divider">|</span>
-                <span>Status: {inv.status || 'Draft'}</span>
                 <span className="invoice-divider">|</span>
                 <span>{getInvoiceSourceLabel(inv)}</span>
                 <span className="invoice-divider">|</span>
@@ -241,19 +355,40 @@ function Invoices() {
             </div>
             <div className="invoice-right">
               <div className="invoice-amount">₱{(inv.amount || 0).toLocaleString()}</div>
-              <div className="invoice-actions">
-                <label className="file-label">
-                  Upload
-                  <input type="file" accept="application/pdf,image/*" onChange={(e) => { if (e.target.files[0]) uploadFile(inv.id, e.target.files[0]); }} />
-                </label>
-                {inv.filePath && <button className="btn btn--primary" onClick={() => { setPreviewError(''); setSelectedInvoice({ ...inv, previewUrl: getStoredPreviewUrl(inv.filePath) }); }}>
-                  <svg className="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 3h4v4M10 14l5-5-5-5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                  View
-                </button>}
-                <button className="btn btn--danger" onClick={() => deleteInvoice(inv.id)}>
-                  <svg className="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 6h18M8 6v12m8-12v12M10 6V4h4v2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                  Remove
-                </button>
+              <div className="invoice-actions invoice-actions--with-status">
+                <div className="invoice-status-wrap">
+                  <span className="invoice-status-label">Status:</span>
+                  <div className="invoice-status-toggle" role="group" aria-label="Invoice status">
+                    <button
+                      type="button"
+                      className={`invoice-status-button ${getInvoiceStatusValue(inv.status) === 'Ongoing' ? 'active' : ''}`}
+                      onClick={() => updateInvoiceStatus(inv.id, 'Ongoing')}
+                    >
+                      Ongoing
+                    </button>
+                    <button
+                      type="button"
+                      className={`invoice-status-button ${getInvoiceStatusValue(inv.status) === 'Complete' ? 'active complete' : ''}`}
+                      onClick={() => updateInvoiceStatus(inv.id, 'Complete')}
+                    >
+                      Complete
+                    </button>
+                  </div>
+                </div>
+                <div className="invoice-actions">
+                  <label className="file-label">
+                    Upload
+                    <input type="file" accept="application/pdf,image/*" onChange={(e) => { if (e.target.files[0]) uploadFile(inv.id, e.target.files[0]); }} />
+                  </label>
+                  {inv.filePath && <button className="btn btn--primary" onClick={() => { setPreviewError(''); setSelectedInvoice({ ...inv, previewUrl: getStoredPreviewUrl(inv.filePath) }); }}>
+                    <svg className="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 3h4v4M10 14l5-5-5-5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    View
+                  </button>}
+                  <button className="btn btn--danger" onClick={() => deleteInvoice(inv.id)}>
+                    <svg className="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 6h18M8 6v12m8-12v12M10 6V4h4v2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    Remove
+                  </button>
+                </div>
               </div>
             </div>
           </div>

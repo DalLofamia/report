@@ -37,8 +37,6 @@ UPLOADS_DIR=./uploads
 REACT_APP_API_BASE_URL=http://localhost:5000
 ```
 
-See `.env.example` files for all available options.
-
 ### 3. Start the Backend Server
 
 In the `app/server` directory, run:
@@ -148,18 +146,7 @@ CREATE TABLE projects (
 ✅ Automatic amount extraction from invoices (OCR)
 ✅ Automatic balance calculation
 ✅ Persistent storage in SQLite database
-✅ **NEW:** Environment-based configuration for production deployment
 ✅ **NEW:** Uploadable files stored in configurable directory
-
-## Production Deployment
-
-**Important:** For deploying online or as an app, see [DEPLOYMENT.md](DEPLOYMENT.md) for detailed instructions on:
-- Database configuration for production
-- Uploading files to cloud servers
-- Docker deployments
-- Windows executable creation
-- Heroku, AWS, Azure deployments
-- And more...
 
 ## Troubleshooting
 
