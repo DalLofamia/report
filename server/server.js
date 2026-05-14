@@ -104,6 +104,12 @@ async function extractAmountFromUploadedFile(filePath, mimeType = '', originalNa
 // Middleware - Configure CORS for production
 const corsOptions = {
   origin: function(origin, callback) {
+    // Allow non-browser requests and same-origin requests without an Origin header
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+
     // Base allowed origins for development
     const allowedOrigins = [
       'http://localhost:3000',
@@ -111,6 +117,11 @@ const corsOptions = {
       'http://127.0.0.1:3000',
       'http://127.0.0.1:5000',
     ];
+
+    if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin)) {
+      callback(null, true);
+      return;
+    }
 
     // In production, use ALLOWED_ORIGINS env var
     if (process.env.NODE_ENV === 'production') {
@@ -120,11 +131,6 @@ const corsOptions = {
           .map(o => o.trim())
           .filter(o => o);
         allowedOrigins.splice(0, allowedOrigins.length, ...productionOrigins);
-      }
-      // Always allow requests without origin header (same-origin, mobile, desktop apps)
-      if (!origin) {
-        callback(null, true);
-        return;
       }
     }
 
@@ -240,6 +246,8 @@ async function initializeMySqlDatabase() {
       progress3 DECIMAL(12,2) DEFAULT 0,
       progress4 DECIMAL(12,2) DEFAULT 0,
       progress5 DECIMAL(12,2) DEFAULT 0,
+      year INT DEFAULT 2026,
+      month INT DEFAULT 1,
       createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
       updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )
@@ -280,6 +288,8 @@ async function initializeMySqlDatabase() {
       payment DECIMAL(12,2) DEFAULT 0,
       paymentMethod VARCHAR(100) NOT NULL DEFAULT '',
       balance DECIMAL(12,2) DEFAULT 0,
+      year INT DEFAULT 2026,
+      month INT DEFAULT 1,
       createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
       updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )
@@ -292,6 +302,8 @@ async function initializeMySqlDatabase() {
       invoiceDate VARCHAR(50),
       amount DECIMAL(12,2) DEFAULT 0,
       status VARCHAR(20) DEFAULT 'Draft',
+      year INT DEFAULT 2026,
+      month INT DEFAULT 1,
       filePath TEXT,
       createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
       updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -302,126 +314,196 @@ async function initializeMySqlDatabase() {
 }
 
 // Initialize database for SQLite
+function ensureSqliteColumn(tableName, columnName, columnDefinition, callback) {
+  db.all(`PRAGMA table_info(${tableName})`, [], (err, columns) => {
+    if (err) {
+      callback(err);
+      return;
+    }
+
+    const hasColumn = Array.isArray(columns) && columns.some((column) => column.name === columnName);
+    if (hasColumn) {
+      callback(null);
+      return;
+    }
+
+    db.run(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDefinition}`, (alterErr) => {
+      if (alterErr) {
+        callback(alterErr);
+        return;
+      }
+      callback(null);
+    });
+  });
+}
+
+function migrateSqliteSchema(callback) {
+  const migrations = [
+    ['projects', 'year', 'INTEGER DEFAULT 2026'],
+    ['projects', 'month', 'INTEGER DEFAULT 1'],
+    ['subcontractors', 'year', 'INTEGER DEFAULT 2026'],
+    ['subcontractors', 'month', 'INTEGER DEFAULT 1'],
+    ['accounting_entries', 'year', 'INTEGER DEFAULT 2026'],
+    ['accounting_entries', 'month', 'INTEGER DEFAULT 1'],
+    ['invoices', 'year', 'INTEGER DEFAULT 2026'],
+    ['invoices', 'month', 'INTEGER DEFAULT 1'],
+  ];
+
+  const runMigration = (index) => {
+    if (index >= migrations.length) {
+      callback(null);
+      return;
+    }
+
+    const [tableName, columnName, columnDefinition] = migrations[index];
+    ensureSqliteColumn(tableName, columnName, columnDefinition, (err) => {
+      if (err) {
+        callback(err);
+        return;
+      }
+      runMigration(index + 1);
+    });
+  };
+
+  runMigration(0);
+}
+
 function initializeDatabase() {
-  db.run(`
-    CREATE TABLE IF NOT EXISTS projects (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      companyName TEXT,
-      projectRequirements TEXT,
-      businessNameLocation TEXT,
-      purchasedOrderNumber TEXT,
-      contractPerson TEXT,
-      contactNumber TEXT,
-      totalContractPrice REAL NOT NULL,
-      downPayment REAL NOT NULL,
-      progress1 REAL DEFAULT 0,
-      progress2 REAL DEFAULT 0,
-      progress3 REAL DEFAULT 0,
-      progress4 REAL DEFAULT 0,
-      progress5 REAL DEFAULT 0,
-      status TEXT DEFAULT 'Ongoing',
-      year INTEGER DEFAULT 2026,
-      month INTEGER DEFAULT 1,
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `, (err) => {
-    if (err) console.error('Error creating projects table:', err);
-    else console.log('Projects table initialized');
+  db.serialize(() => {
+    db.run(`
+      CREATE TABLE IF NOT EXISTS projects (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        companyName TEXT,
+        projectRequirements TEXT,
+        businessNameLocation TEXT,
+        purchasedOrderNumber TEXT,
+        contractPerson TEXT,
+        contactNumber TEXT,
+        totalContractPrice REAL NOT NULL,
+        downPayment REAL NOT NULL,
+        progress1 REAL DEFAULT 0,
+        progress2 REAL DEFAULT 0,
+        progress3 REAL DEFAULT 0,
+        progress4 REAL DEFAULT 0,
+        progress5 REAL DEFAULT 0,
+        status TEXT DEFAULT 'Ongoing',
+        year INTEGER DEFAULT 2026,
+        month INTEGER DEFAULT 1,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `, (err) => {
+      if (err) console.error('Error creating projects table:', err);
+      else console.log('Projects table initialized');
+    });
+
+    db.run(`
+      CREATE TABLE IF NOT EXISTS subcontractors (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        subcontractor TEXT NOT NULL,
+        contactPerson TEXT,
+        contactNumber TEXT,
+        totalContractPrice REAL NOT NULL,
+        downPayment REAL NOT NULL,
+        progress1 REAL DEFAULT 0,
+        progress2 REAL DEFAULT 0,
+        progress3 REAL DEFAULT 0,
+        progress4 REAL DEFAULT 0,
+        progress5 REAL DEFAULT 0,
+        year INTEGER DEFAULT 2026,
+        month INTEGER DEFAULT 1,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `, (err) => {
+      if (err) console.error('Error creating subcontractors table:', err);
+      else console.log('Subcontractors table initialized');
+    });
+
+    db.run(`
+      CREATE TABLE IF NOT EXISTS inventory_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        itemName TEXT NOT NULL,
+        unit TEXT,
+        quantity REAL DEFAULT 0,
+        location TEXT,
+        remarks TEXT,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `, (err) => {
+      if (err) console.error('Error creating inventory table:', err);
+      else console.log('Inventory table initialized');
+    });
+
+    db.run(`
+      CREATE TABLE IF NOT EXISTS purchases (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        purchaseName TEXT NOT NULL,
+        purchaseDate TEXT,
+        amount REAL DEFAULT 0,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `, (err) => {
+      if (err) console.error('Error creating purchases table:', err);
+      else console.log('Purchases table initialized');
+    });
+
+    db.run(`
+      CREATE TABLE IF NOT EXISTS accounting_entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        entryName TEXT NOT NULL,
+        entryDate TEXT,
+        particulars TEXT,
+        debit REAL DEFAULT 0,
+        credit REAL DEFAULT 0,
+        payment REAL DEFAULT 0,
+        paymentMethod TEXT DEFAULT '',
+        balance REAL DEFAULT 0,
+        year INTEGER DEFAULT 2026,
+        month INTEGER DEFAULT 1,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `, (err) => {
+      if (err) console.error('Error creating accounting table:', err);
+      else console.log('Accounting table initialized');
+    });
+
+    const uploadsDir = path.join(UPLOADS_DIR, 'invoices');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    db.run(`
+      CREATE TABLE IF NOT EXISTS invoices (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        invoiceName TEXT NOT NULL,
+        invoiceDate TEXT,
+        amount REAL DEFAULT 0,
+        status TEXT DEFAULT 'Draft',
+        year INTEGER DEFAULT 2026,
+        month INTEGER DEFAULT 1,
+        filePath TEXT,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `, (err) => {
+      if (err) console.error('Error creating invoices table:', err);
+      else console.log('Invoices table initialized');
+    });
+
+    migrateSqliteSchema((migrateErr) => {
+      if (migrateErr) {
+        console.error('Error migrating SQLite schema:', migrateErr);
+        process.exit(1);
+        return;
+      }
+
+      backfillInvoiceAmounts();
+    });
   });
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS subcontractors (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      subcontractor TEXT NOT NULL,
-      contactPerson TEXT,
-      contactNumber TEXT,
-      totalContractPrice REAL NOT NULL,
-      downPayment REAL NOT NULL,
-      progress1 REAL DEFAULT 0,
-      progress2 REAL DEFAULT 0,
-      progress3 REAL DEFAULT 0,
-      progress4 REAL DEFAULT 0,
-      progress5 REAL DEFAULT 0,
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `, (err) => {
-    if (err) console.error('Error creating subcontractors table:', err);
-    else console.log('Subcontractors table initialized');
-  });
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS inventory_items (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      itemName TEXT NOT NULL,
-      unit TEXT,
-      quantity REAL DEFAULT 0,
-      location TEXT,
-      remarks TEXT,
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `, (err) => {
-    if (err) console.error('Error creating inventory table:', err);
-    else console.log('Inventory table initialized');
-  });
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS purchases (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      purchaseName TEXT NOT NULL,
-      purchaseDate TEXT,
-      amount REAL DEFAULT 0,
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `, (err) => {
-    if (err) console.error('Error creating purchases table:', err);
-    else console.log('Purchases table initialized');
-  });
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS accounting_entries (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      entryName TEXT NOT NULL,
-      entryDate TEXT,
-      particulars TEXT,
-      debit REAL DEFAULT 0,
-      credit REAL DEFAULT 0,
-      payment REAL DEFAULT 0,
-      paymentMethod TEXT DEFAULT '',
-      balance REAL DEFAULT 0,
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `, (err) => {
-    if (err) console.error('Error creating accounting table:', err);
-    else console.log('Accounting table initialized');
-  });
-
-  const uploadsDir = path.join(UPLOADS_DIR, 'invoices');
-  if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
-  }
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS invoices (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      invoiceName TEXT NOT NULL,
-      invoiceDate TEXT,
-      amount REAL DEFAULT 0,
-      status TEXT DEFAULT 'Draft',
-      filePath TEXT,
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `, (err) => {
-    if (err) console.error('Error creating invoices table:', err);
-    else console.log('Invoices table initialized');
-  });
-
-  backfillInvoiceAmounts();
 }
 
 function backfillInvoiceAmounts() {
@@ -475,9 +557,30 @@ function startServer() {
 
 // Routes
 
-// GET all projects
+// GET all projects with optional year/month filtering
 app.get('/api/projects', (req, res) => {
-  db.all('SELECT * FROM projects ORDER BY id DESC', [], (err, rows) => {
+  const { year, month } = req.query;
+  let sql = 'SELECT * FROM projects';
+  const params = [];
+
+  if (year || month) {
+    const conditions = [];
+    if (year) {
+      conditions.push('year = ?');
+      params.push(parseInt(year, 10));
+    }
+    if (month) {
+      conditions.push('month = ?');
+      params.push(parseInt(month, 10));
+    }
+    if (conditions.length > 0) {
+      sql += ' WHERE ' + conditions.join(' AND ');
+    }
+  }
+
+  sql += ' ORDER BY id DESC';
+
+  db.all(sql, params, (err, rows) => {
     if (err) {
       res.status(500).json({ error: err.message });
       return;
@@ -801,9 +904,28 @@ app.delete('/api/projects/:id', (req, res) => {
 
 // SUBCONTRACTOR ROUTES
 
-// GET all subcontractors
+// GET all subcontractors with optional year/month filtering
 app.get('/api/subcontractors', (req, res) => {
-  db.all('SELECT * FROM subcontractors', [], (err, rows) => {
+  const { year, month } = req.query;
+  let sql = 'SELECT * FROM subcontractors';
+  const params = [];
+
+  if (year || month) {
+    const conditions = [];
+    if (year) {
+      conditions.push('year = ?');
+      params.push(parseInt(year, 10));
+    }
+    if (month) {
+      conditions.push('month = ?');
+      params.push(parseInt(month, 10));
+    }
+    if (conditions.length > 0) {
+      sql += ' WHERE ' + conditions.join(' AND ');
+    }
+  }
+
+  db.all(sql, params, (err, rows) => {
     if (err) {
       res.status(500).json({ error: err.message });
       return;
@@ -841,17 +963,32 @@ app.post('/api/subcontractors', (req, res) => {
     progress3 = 0,
     progress4 = 0,
     progress5 = 0,
+    year = 2026,
+    month = 1,
   } = req.body;
+
+  const subcontractorYear = parseInt(year, 10);
+  const subcontractorMonth = parseInt(month, 10);
+
+  if (isNaN(subcontractorYear) || subcontractorYear < 2026 || subcontractorYear > 2035) {
+    res.status(400).json({ error: 'Year must be between 2026 and 2035' });
+    return;
+  }
+
+  if (isNaN(subcontractorMonth) || subcontractorMonth < 1 || subcontractorMonth > 12) {
+    res.status(400).json({ error: 'Month must be between 1 and 12' });
+    return;
+  }
 
   const sql = `
     INSERT INTO subcontractors 
-    (subcontractor, contactPerson, contactNumber, totalContractPrice, downPayment, progress1, progress2, progress3, progress4, progress5)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    (subcontractor, contactPerson, contactNumber, totalContractPrice, downPayment, progress1, progress2, progress3, progress4, progress5, year, month)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   db.run(
     sql,
-    [subcontractor, contactPerson, contactNumber, totalContractPrice, downPayment, progress1, progress2, progress3, progress4, progress5],
+    [subcontractor, contactPerson, contactNumber, totalContractPrice, downPayment, progress1, progress2, progress3, progress4, progress5, subcontractorYear, subcontractorMonth],
     function (err) {
       if (err) {
         res.status(500).json({ error: err.message });
@@ -876,7 +1013,22 @@ app.put('/api/subcontractors/:id', (req, res) => {
     progress3,
     progress4,
     progress5,
+    year = 2026,
+    month = 1,
   } = req.body;
+
+  const subcontractorYear = parseInt(year, 10);
+  const subcontractorMonth = parseInt(month, 10);
+
+  if (isNaN(subcontractorYear) || subcontractorYear < 2026 || subcontractorYear > 2035) {
+    res.status(400).json({ error: 'Year must be between 2026 and 2035' });
+    return;
+  }
+
+  if (isNaN(subcontractorMonth) || subcontractorMonth < 1 || subcontractorMonth > 12) {
+    res.status(400).json({ error: 'Month must be between 1 and 12' });
+    return;
+  }
 
   const sql = `
     UPDATE subcontractors
@@ -890,13 +1042,15 @@ app.put('/api/subcontractors/:id', (req, res) => {
         progress3 = ?, 
         progress4 = ?, 
         progress5 = ?,
+        year = ?,
+        month = ?,
         updatedAt = CURRENT_TIMESTAMP
     WHERE id = ?
   `;
 
   db.run(
     sql,
-    [subcontractor, contactPerson, contactNumber, totalContractPrice, downPayment, progress1, progress2, progress3, progress4, progress5, id],
+    [subcontractor, contactPerson, contactNumber, totalContractPrice, downPayment, progress1, progress2, progress3, progress4, progress5, subcontractorYear, subcontractorMonth, id],
     function (err) {
       if (err) {
         res.status(500).json({ error: err.message });
@@ -1149,14 +1303,35 @@ app.delete('/api/purchases/:id', (req, res) => {
 
 // ACCOUNTING ROUTES
 
-// GET all accounting entries
+// GET all accounting entries with optional year/month filtering
 app.get('/api/accounting', (req, res) => {
   if (!db) {
     console.error('Database not initialized');
     return res.status(500).json({ error: 'Database not initialized' });
   }
   
-  db.all('SELECT * FROM accounting_entries ORDER BY id DESC', [], (err, rows) => {
+  const { year, month } = req.query;
+  let sql = 'SELECT * FROM accounting_entries';
+  const params = [];
+
+  if (year || month) {
+    const conditions = [];
+    if (year) {
+      conditions.push('year = ?');
+      params.push(parseInt(year, 10));
+    }
+    if (month) {
+      conditions.push('month = ?');
+      params.push(parseInt(month, 10));
+    }
+    if (conditions.length > 0) {
+      sql += ' WHERE ' + conditions.join(' AND ');
+    }
+  }
+
+  sql += ' ORDER BY id DESC';
+
+  db.all(sql, params, (err, rows) => {
     if (err) {
       console.error('Database error fetching accounting entries:', err);
       return res.status(500).json({ error: 'Failed to fetch accounting entries: ' + err.message });
@@ -1192,20 +1367,34 @@ app.post('/api/accounting', (req, res) => {
     payment = 0,
     paymentMethod = '',
     balance = 0,
+    year = 2026,
+    month = 1,
   } = req.body;
 
   const normalizedDebit = Number(debit || 0);
   const normalizedPayment = Number(payment || 0);
   const normalizedCredit = Number(credit || normalizedPayment);
   const normalizedBalance = Number(balance || (normalizedDebit - normalizedCredit));
+  const accountingYear = parseInt(year, 10);
+  const accountingMonth = parseInt(month, 10);
+
+  if (isNaN(accountingYear) || accountingYear < 2026 || accountingYear > 2035) {
+    res.status(400).json({ error: 'Year must be between 2026 and 2035' });
+    return;
+  }
+
+  if (isNaN(accountingMonth) || accountingMonth < 1 || accountingMonth > 12) {
+    res.status(400).json({ error: 'Month must be between 1 and 12' });
+    return;
+  }
 
   const sql = `
     INSERT INTO accounting_entries
-    (entryName, entryDate, particulars, debit, credit, payment, paymentMethod, balance)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    (entryName, entryDate, particulars, debit, credit, payment, paymentMethod, balance, year, month)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
-  db.run(sql, [entryName, entryDate, particulars, normalizedDebit, normalizedCredit, normalizedPayment, paymentMethod, normalizedBalance], function (err) {
+  db.run(sql, [entryName, entryDate, particulars, normalizedDebit, normalizedCredit, normalizedPayment, paymentMethod, normalizedBalance, accountingYear, accountingMonth], function (err) {
     if (err) {
       res.status(500).json({ error: err.message });
       return;
@@ -1226,12 +1415,26 @@ app.put('/api/accounting/:id', (req, res) => {
     payment,
     paymentMethod = '',
     balance,
+    year = 2026,
+    month = 1,
   } = req.body;
 
   const normalizedDebit = Number(debit || 0);
   const normalizedPayment = Number(payment || 0);
   const normalizedCredit = Number(credit || normalizedPayment);
   const normalizedBalance = Number(balance || (normalizedDebit - normalizedCredit));
+  const accountingYear = parseInt(year, 10);
+  const accountingMonth = parseInt(month, 10);
+
+  if (isNaN(accountingYear) || accountingYear < 2026 || accountingYear > 2035) {
+    res.status(400).json({ error: 'Year must be between 2026 and 2035' });
+    return;
+  }
+
+  if (isNaN(accountingMonth) || accountingMonth < 1 || accountingMonth > 12) {
+    res.status(400).json({ error: 'Month must be between 1 and 12' });
+    return;
+  }
 
   const sql = `
     UPDATE accounting_entries
@@ -1243,11 +1446,13 @@ app.put('/api/accounting/:id', (req, res) => {
         payment = ?,
         paymentMethod = ?,
         balance = ?,
+        year = ?,
+        month = ?,
         updatedAt = CURRENT_TIMESTAMP
     WHERE id = ?
   `;
 
-  db.run(sql, [entryName, entryDate, particulars, normalizedDebit, normalizedCredit, normalizedPayment, paymentMethod, normalizedBalance, id], function (err) {
+  db.run(sql, [entryName, entryDate, particulars, normalizedDebit, normalizedCredit, normalizedPayment, paymentMethod, normalizedBalance, accountingYear, accountingMonth, id], function (err) {
     if (err) {
       res.status(500).json({ error: err.message });
       return;
@@ -1317,9 +1522,30 @@ app.use('/uploads', express.static(path.join(UPLOADS_DIR)));
 
 // INVOICES ROUTES
 
-// GET all invoices
+// GET all invoices with optional year/month filtering
 app.get('/api/invoices', (req, res) => {
-  db.all('SELECT * FROM invoices ORDER BY id DESC', [], (err, rows) => {
+  const { year, month } = req.query;
+  let sql = 'SELECT * FROM invoices';
+  const params = [];
+
+  if (year || month) {
+    const conditions = [];
+    if (year) {
+      conditions.push('year = ?');
+      params.push(parseInt(year, 10));
+    }
+    if (month) {
+      conditions.push('month = ?');
+      params.push(parseInt(month, 10));
+    }
+    if (conditions.length > 0) {
+      sql += ' WHERE ' + conditions.join(' AND ');
+    }
+  }
+
+  sql += ' ORDER BY id DESC';
+
+  db.all(sql, params, (err, rows) => {
     if (err) {
       res.status(500).json({ error: err.message });
       return;
@@ -1346,7 +1572,7 @@ app.get('/api/invoices/:id', (req, res) => {
 
 // POST - Create invoice with optional file upload
 app.post('/api/invoices', upload.single('file'), async (req, res) => {
-  const { invoiceName, invoiceDate = '', amount = 0, status = 'Draft' } = req.body;
+  const { invoiceName, invoiceDate = '', amount = 0, status = 'Draft', year = 2026, month = 1 } = req.body;
   const filePath = req.file ? `/uploads/invoices/${req.file.filename}` : null;
   const uploadedFilePath = req.file ? path.join(__dirname, 'uploads', 'invoices', req.file.filename) : null;
 
@@ -1357,13 +1583,26 @@ app.post('/api/invoices', upload.single('file'), async (req, res) => {
   const numericAmount = Number.parseFloat(amount);
   const finalAmount = Number.isFinite(numericAmount) && numericAmount > 0 ? numericAmount : extractedAmount;
 
+  const invoiceYear = parseInt(year, 10);
+  const invoiceMonth = parseInt(month, 10);
+
+  if (isNaN(invoiceYear) || invoiceYear < 2026 || invoiceYear > 2035) {
+    res.status(400).json({ error: 'Year must be between 2026 and 2035' });
+    return;
+  }
+
+  if (isNaN(invoiceMonth) || invoiceMonth < 1 || invoiceMonth > 12) {
+    res.status(400).json({ error: 'Month must be between 1 and 12' });
+    return;
+  }
+
   const sql = `
     INSERT INTO invoices
-    (invoiceName, invoiceDate, amount, status, filePath)
-    VALUES (?, ?, ?, ?, ?)
+    (invoiceName, invoiceDate, amount, status, year, month, filePath)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `;
 
-  db.run(sql, [invoiceName, invoiceDate, finalAmount, status, filePath], function (err) {
+  db.run(sql, [invoiceName, invoiceDate, finalAmount, status, invoiceYear, invoiceMonth, filePath], function (err) {
     if (err) {
       res.status(500).json({ error: err.message });
       return;
@@ -1375,7 +1614,7 @@ app.post('/api/invoices', upload.single('file'), async (req, res) => {
 // PUT - Update invoice (optionally replace file)
 app.put('/api/invoices/:id', upload.single('file'), async (req, res) => {
   const { id } = req.params;
-  const { invoiceName, invoiceDate, amount, status } = req.body;
+  const { invoiceName, invoiceDate, amount, status, year = 2026, month = 1 } = req.body;
   const filePath = req.file ? `/uploads/invoices/${req.file.filename}` : null;
   const uploadedFilePath = req.file ? path.join(__dirname, 'uploads', 'invoices', req.file.filename) : null;
 
@@ -1396,18 +1635,33 @@ app.put('/api/invoices/:id', upload.single('file'), async (req, res) => {
     });
   }
 
+  const invoiceYear = parseInt(year, 10);
+  const invoiceMonth = parseInt(month, 10);
+
+  if (isNaN(invoiceYear) || invoiceYear < 2026 || invoiceYear > 2035) {
+    res.status(400).json({ error: 'Year must be between 2026 and 2035' });
+    return;
+  }
+
+  if (isNaN(invoiceMonth) || invoiceMonth < 1 || invoiceMonth > 12) {
+    res.status(400).json({ error: 'Month must be between 1 and 12' });
+    return;
+  }
+
   const sql = `
     UPDATE invoices
     SET invoiceName = ?,
         invoiceDate = ?,
         amount = ?,
         status = ?,
+        year = ?,
+        month = ?,
         filePath = COALESCE(?, filePath),
         updatedAt = CURRENT_TIMESTAMP
     WHERE id = ?
   `;
 
-  db.run(sql, [invoiceName, invoiceDate, finalAmount, status, filePath, id], function (err) {
+  db.run(sql, [invoiceName, invoiceDate, finalAmount, status, invoiceYear, invoiceMonth, filePath, id], function (err) {
     if (err) {
       res.status(500).json({ error: err.message });
       return;

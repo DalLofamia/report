@@ -16,12 +16,27 @@ function Accountingp() {
   const [showImport, setShowImport] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState('');
 
-  const fetchEntries = useCallback(async (silent = false) => {
+  const currentDate = new Date();
+  const currentYear = currentDate.getFullYear();
+  const currentMonth = currentDate.getMonth() + 1;
+
+  const [filterYear, setFilterYear] = useState(null);
+  const [filterMonth, setFilterMonth] = useState(null);
+
+  const fetchEntries = useCallback(async (silent = false, year = filterYear, month = filterMonth) => {
     try {
       if (!silent) {
         setLoading(true);
       }
-      const response = await fetch(API_URL);
+      const queryParams = new URLSearchParams();
+      if (year !== null && year !== undefined && year !== '') {
+        queryParams.append('year', year);
+      }
+      if (month !== null && month !== undefined && month !== '') {
+        queryParams.append('month', month);
+      }
+      const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+      const response = await fetch(API_URL + queryString);
       if (!response.ok) {
         throw new Error('Failed to fetch accounting entries');
       }
@@ -43,7 +58,10 @@ function Accountingp() {
         setLoading(false);
       }
     }
-  }, []);
+  }, [filterYear, filterMonth]);
+
+  const getActiveEntryYear = () => filterYear ?? currentYear;
+  const getActiveEntryMonth = () => filterMonth ?? currentMonth;
 
   const fetchInvoices = useCallback(async () => {
     try {
@@ -58,9 +76,9 @@ function Accountingp() {
   }, [selectedInvoice]);
 
   useEffect(() => {
-    fetchEntries();
+    fetchEntries(false, filterYear, filterMonth);
     fetchInvoices();
-  }, [fetchEntries, fetchInvoices]);
+  }, [filterYear, filterMonth, fetchEntries, fetchInvoices]);
 
   const addEntry = async () => {
     try {
@@ -76,6 +94,8 @@ function Accountingp() {
           payment: 0,
           paymentMethod: '',
           balance: 0,
+          year: getActiveEntryYear(),
+          month: getActiveEntryMonth(),
         }),
       });
 
@@ -147,6 +167,8 @@ function Accountingp() {
           payment: 0,
           paymentMethod: entry.paymentMethod || '',
           balance: entry.amount === '' ? 0 : entry.amount,
+          year: getActiveEntryYear(),
+          month: getActiveEntryMonth(),
         }),
       });
 
@@ -197,6 +219,42 @@ function Accountingp() {
             <svg className="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 3h4v4M10 14l5-5-5-5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
             Invoices
           </button>
+        </div>
+      </div>
+
+      <div className="accounting-filters">
+        <div className="filter-group">
+          <label htmlFor="accountingFilterYear">Year:</label>
+          <select
+            id="accountingFilterYear"
+            className="filter-select"
+            value={filterYear ?? ''}
+            onChange={(e) => setFilterYear(e.target.value ? parseInt(e.target.value, 10) : null)}
+          >
+            <option value="">All Years</option>
+            {Array.from({ length: 10 }, (_, i) => 2026 + i).map((year) => (
+              <option key={year} value={year}>
+                {year}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="filter-group">
+          <label htmlFor="accountingFilterMonth">Month:</label>
+          <select
+            id="accountingFilterMonth"
+            className="filter-select"
+            value={filterMonth ?? ''}
+            onChange={(e) => setFilterMonth(e.target.value ? parseInt(e.target.value, 10) : null)}
+          >
+            <option value="">All Months</option>
+            {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => (
+              <option key={month} value={month}>
+                {new Date(2026, month - 1).toLocaleString('en-US', { month: 'long' })}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 

@@ -202,7 +202,7 @@ function createMySqlDatabase() {
 ║   docker exec -it mysql mysql -u root -ppassword \\                     ║
 ║     -e "CREATE DATABASE project_tracker;"                               ║
 ║                                                                            ║
-║ See MYSQL_SETUP.md for more help                                         ║
+║ Configure MYSQL_HOST or MYSQL_URL in your server environment             ║
 ╚════════════════════════════════════════════════════════════════════════════╝
     `.trim();
     throw new Error(errorMsg);

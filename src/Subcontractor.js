@@ -12,17 +12,32 @@ function Subcontractor() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const currentDate = new Date();
+  const currentYear = currentDate.getFullYear();
+  const currentMonth = currentDate.getMonth() + 1;
+
+  const [filterYear, setFilterYear] = useState(null);
+  const [filterMonth, setFilterMonth] = useState(null);
+
   // Fetch subcontractors from database
   useEffect(() => {
-    fetchSubcontractors();
-  }, []);
+    fetchSubcontractors(false, filterYear, filterMonth);
+  }, [filterYear, filterMonth]);
 
-  const fetchSubcontractors = async (silent = false) => {
+  const fetchSubcontractors = async (silent = false, year = filterYear, month = filterMonth) => {
     try {
       if (!silent) {
         setLoading(true);
       }
-      const response = await fetch(API_URL);
+      const queryParams = new URLSearchParams();
+      if (year !== null && year !== undefined && year !== '') {
+        queryParams.append('year', year);
+      }
+      if (month !== null && month !== undefined && month !== '') {
+        queryParams.append('month', month);
+      }
+      const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+      const response = await fetch(API_URL + queryString);
       if (!response.ok) throw new Error('Failed to fetch subcontractors');
       const data = await response.json();
       const formattedData = data.map(sub => ({
@@ -46,6 +61,9 @@ function Subcontractor() {
     }
   };
 
+  const getActiveSubcontractorYear = () => filterYear ?? currentYear;
+  const getActiveSubcontractorMonth = () => filterMonth ?? currentMonth;
+
   // Add new subcontractor
   const addSubcontractor = async () => {
     const newSub = {
@@ -59,6 +77,8 @@ function Subcontractor() {
       progress3: 0,
       progress4: 0,
       progress5: 0,
+      year: getActiveSubcontractorYear(),
+      month: getActiveSubcontractorMonth(),
     };
 
     try {
@@ -114,6 +134,8 @@ function Subcontractor() {
           progress3: sub.progress[2],
           progress4: sub.progress[3],
           progress5: sub.progress[4],
+          year: getActiveSubcontractorYear(),
+          month: getActiveSubcontractorMonth(),
         }),
       });
       if (!response.ok) throw new Error('Failed to save subcontractor');
@@ -166,6 +188,42 @@ function Subcontractor() {
         <div className="subcontractor-header-buttons">
           <button className="btn-add" onClick={() => navigate('/')}>← Back</button>
           <button onClick={addSubcontractor} className="btn-add">+ Add Subcontractor</button>
+        </div>
+      </div>
+
+      <div className="subcontractor-filters">
+        <div className="filter-group">
+          <label htmlFor="subcontractorFilterYear">Year:</label>
+          <select
+            id="subcontractorFilterYear"
+            className="filter-select"
+            value={filterYear ?? ''}
+            onChange={(e) => setFilterYear(e.target.value ? parseInt(e.target.value, 10) : null)}
+          >
+            <option value="">All Years</option>
+            {Array.from({ length: 10 }, (_, i) => 2026 + i).map((year) => (
+              <option key={year} value={year}>
+                {year}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="filter-group">
+          <label htmlFor="subcontractorFilterMonth">Month:</label>
+          <select
+            id="subcontractorFilterMonth"
+            className="filter-select"
+            value={filterMonth ?? ''}
+            onChange={(e) => setFilterMonth(e.target.value ? parseInt(e.target.value, 10) : null)}
+          >
+            <option value="">All Months</option>
+            {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => (
+              <option key={month} value={month}>
+                {new Date(2026, month - 1).toLocaleString('en-US', { month: 'long' })}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
       

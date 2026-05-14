@@ -62,6 +62,10 @@ function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeSlice, setActiveSlice] = useState('');
+  
+  const [filterYear, setFilterYear] = useState(null);
+  const [filterMonth, setFilterMonth] = useState(null);
+  
   const [data, setData] = useState({
     accounting: [],
     projects: [],
@@ -69,18 +73,27 @@ function Dashboard() {
     invoices: [],
   });
 
-  const fetchDashboardData = useCallback(async (silent = false) => {
+  const fetchDashboardData = useCallback(async (silent = false, year = filterYear, month = filterMonth) => {
     if (!silent) {
       setLoading(true);
     }
     setError('');
 
     try {
+      const queryParams = new URLSearchParams();
+      if (year !== null && year !== undefined && year !== '') {
+        queryParams.append('year', year);
+      }
+      if (month !== null && month !== undefined && month !== '') {
+        queryParams.append('month', month);
+      }
+      const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+      
       const responses = await Promise.all([
-        fetch(API_ENDPOINTS.accounting),
-        fetch(API_ENDPOINTS.projects),
-        fetch(API_ENDPOINTS.subcontractors),
-        fetch(API_ENDPOINTS.invoices),
+        fetch(API_ENDPOINTS.accounting + queryString),
+        fetch(API_ENDPOINTS.projects + queryString),
+        fetch(API_ENDPOINTS.subcontractors + queryString),
+        fetch(API_ENDPOINTS.invoices + queryString),
       ]);
 
       responses.forEach((response) => {
@@ -116,14 +129,18 @@ function Dashboard() {
 
   useEffect(() => {
     mountedRef.current = true;
-    fetchDashboardData();
 
     return () => {
       mountedRef.current = false;
     };
-  }, [fetchDashboardData]);
+  }, []);
 
-  useRealtimeSync(() => fetchDashboardData(true), 5000);
+  // Re-fetch when filters change
+  useEffect(() => {
+    fetchDashboardData(false, filterYear, filterMonth);
+  }, [filterYear, filterMonth]);
+
+  useRealtimeSync(() => fetchDashboardData(true, filterYear, filterMonth), 5000);
 
   const totals = useMemo(() => {
     const accountingTotal = sum(data.accounting, (entry) => toNumber(entry.debit ?? entry.amount));
@@ -217,6 +234,42 @@ function Dashboard() {
         <button className="btn btn--primary" onClick={() => navigate('/')}>
           Back Home
         </button>
+      </div>
+
+      <div className="dashboard-filters">
+        <div className="filter-group">
+          <label htmlFor="dashboardFilterYear">Year:</label>
+          <select
+            id="dashboardFilterYear"
+            className="filter-select"
+            value={filterYear ?? ''}
+            onChange={(e) => setFilterYear(e.target.value ? parseInt(e.target.value, 10) : null)}
+          >
+            <option value="">All Years</option>
+            {Array.from({ length: 10 }, (_, i) => 2026 + i).map((year) => (
+              <option key={year} value={year}>
+                {year}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="filter-group">
+          <label htmlFor="dashboardFilterMonth">Month:</label>
+          <select
+            id="dashboardFilterMonth"
+            className="filter-select"
+            value={filterMonth ?? ''}
+            onChange={(e) => setFilterMonth(e.target.value ? parseInt(e.target.value, 10) : null)}
+          >
+            <option value="">All Months</option>
+            {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => (
+              <option key={month} value={month}>
+                {new Date(2026, month - 1).toLocaleString('en-US', { month: 'long' })}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {error && <p className="dashboard-error">{error}</p>}
