@@ -179,7 +179,9 @@ db.ready
     } else {
       initializeDatabase();
     }
-    startServer();
+    if (require.main === module) {
+      startServer();
+    }
   })
   .catch((err) => {
     // If MySQL fails, silently fall back to SQLite
@@ -192,8 +194,13 @@ db.ready
     console.warn('⚠️  MySQL connection failed, switching to SQLite...');
     console.log('📦 Using SQLite for local development');
     initializeDatabase();
-    startServer();
+    if (require.main === module) {
+      startServer();
+    }
   });
+
+// Export the Express app for serverless wrappers and tests
+module.exports = app;
 
 function runSql(sql, params = []) {
   return new Promise((resolve, reject) => {
