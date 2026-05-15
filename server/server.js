@@ -5,7 +5,6 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const { PDFParse } = require('pdf-parse');
-const { createWorker } = require('tesseract.js');
 const { createDatabase } = require('./db');
 require('dotenv').config();
 
@@ -25,8 +24,30 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 let invoiceTextWorkerPromise = null;
 
 async function getInvoiceTextWorker() {
-  if (!invoiceTextWorkerPromise) {
-    invoiceTextWorkerPromise = createWorker('eng');
+  if (invoiceTextWorkerPromise) return invoiceTextWorkerPromise;
+
+  // Require tesseract lazily because it bundles heavy WASM/native assets
+  // which can cause serverless cold-start crashes if loaded at import time.
+  try {
+    const { createWorker } = require('tesseract.js');
+    const worker = createWorker();
+    // Initialize lazily when first used
+    invoiceTextWorkerPromise = (async () => {
+      try {
+        await worker.load();
+        await worker.loadLanguage('eng');
+        await worker.initialize('eng');
+        return worker;
+      } catch (err) {
+        console.warn('⚠️  tesseract worker init failed:', err && err.message);
+        return {
+          recognize: async () => ({ data: { text: '' } }),
+        };
+      }
+    })();
+  } catch (err) {
+    console.warn('⚠️  tesseract.js not available in this environment:', err.message);
+    invoiceTextWorkerPromise = Promise.resolve({ recognize: async () => ({ data: { text: '' } }) });
   }
 
   return invoiceTextWorkerPromise;

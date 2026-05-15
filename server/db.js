@@ -1,5 +1,6 @@
 const path = require('path');
-const sqlite3 = require('sqlite3').verbose();
+// sqlite3 is a native module that may not be available in serverless environments.
+// Require it lazily inside the SQLite creation function to avoid import-time crashes.
 const mysql = require('mysql2/promise');
 
 // Helper to convert SQLite PRAGMA queries to MySQL INFORMATION_SCHEMA queries
@@ -118,15 +119,50 @@ function createSqliteDatabase(dbPath) {
     rejectReady = reject;
   });
 
-  const sqliteDb = new sqlite3.Database(dbPath, (err) => {
-    if (err) {
-      rejectReady(err);
-      return;
-    }
+  let sqliteDb;
+  try {
+    const sqlite3 = require('sqlite3').verbose();
+    sqliteDb = new sqlite3.Database(dbPath, (err) => {
+      if (err) {
+        rejectReady(err);
+        return;
+      }
 
-    console.log('📦 Using SQLite database (Local Development)');
-    resolveReady();
-  });
+      console.log('📦 Using SQLite database (Local Development)');
+      resolveReady();
+    });
+  } catch (err) {
+    // If sqlite3 cannot be required (native binary missing), provide a safe shim
+    // that defers errors until DB methods are actually called. This prevents
+    // import-time crashes in serverless environments while making failure modes
+    // obvious at runtime.
+    console.warn('⚠️  sqlite3 module not available in this environment:', err.message);
+    rejectReady(new Error('sqlite3 module not available'));
+    // Create a minimal shim to avoid undefined references elsewhere
+    sqliteDb = {
+      run(sql, params, cb) {
+        const e = new Error('sqlite3 module not available in this environment');
+        if (typeof params === 'function') params(e);
+        else if (typeof cb === 'function') cb(e);
+      },
+      get(sql, params, cb) {
+        const e = new Error('sqlite3 module not available in this environment');
+        if (typeof params === 'function') params(e);
+        else if (typeof cb === 'function') cb(e);
+      },
+      all(sql, params, cb) {
+        const e = new Error('sqlite3 module not available in this environment');
+        if (typeof params === 'function') params(e);
+        else if (typeof cb === 'function') cb(e);
+      },
+      serialize(cb) {
+        if (typeof cb === 'function') cb();
+      },
+      close(cb) {
+        if (typeof cb === 'function') cb(new Error('sqlite3 module not available'));
+      },
+    };
+  }
 
   return {
     isMySQL: false,
