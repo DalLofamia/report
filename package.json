@@ -5,9 +5,7 @@
   "engines": {
     "node": "24.x"
   },
-  "workspaces": [
-    "server"
-  ],
+  
   "main": "electron/main.js",
   "homepage": "./",
   "dependencies": {
