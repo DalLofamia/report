@@ -25,3 +25,5 @@ yarn-error.log*
 
 # Electron
 /electron/dist
+
+.vercel
