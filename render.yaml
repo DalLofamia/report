@@ -1,0 +1,16 @@
+# Render manifest to deploy the app using the Dockerfile in `app/Dockerfile`.
+# Deploy by connecting this repo to Render and enabling the `render.yaml` manifest.
+services:
+  - type: web
+    name: new-report-app
+    env: docker
+    branch: main
+    dockerfilePath: Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true
+    plan: free
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3000"
