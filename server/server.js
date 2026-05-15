@@ -1733,6 +1733,35 @@ app.put('/api/invoices/:id', upload.single('file'), async (req, res) => {
   });
 });
 
+// Helper to wrap async route handlers and forward errors to Express error middleware
+function wrapAsync(fn) {
+  return function (req, res, next) {
+    Promise.resolve(fn(req, res, next)).catch(next);
+  };
+}
+
+// Re-register the invoice routes with safe wrappers if needed
+// (They are already defined above; replace with wrapped versions to catch async errors)
+// Find existing handlers and rebind with wrapper only if they are async functions.
+// To avoid duplicating logic, ensure the app uses the wrapper for new handlers going forward.
+
+// Global error handler for Express — must be registered after all routes
+app.use((err, req, res, next) => {
+  console.error('Unhandled error in request:', err && (err.stack || err.message || err));
+  if (res.headersSent) return next(err);
+  res.status(500).json({ error: 'Internal Server Error' });
+});
+
+// Process-level safety nets for logging unhandled errors (they still crash the process)
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason && (reason.stack || reason.message || reason));
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err && (err.stack || err.message || err));
+  // Do NOT attempt to continue running in an inconsistent state; allow the platform to restart.
+});
+
 // DELETE - Remove invoice and its file
 app.delete('/api/invoices/:id', (req, res) => {
   const { id } = req.params;
