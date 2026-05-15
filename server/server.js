@@ -181,33 +181,54 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', message: 'Server is running' });
 });
 
-db.ready
-  .then(async () => {
-    console.log(db.isMySQL ? '✅ Connected to MySQL database' : '📦 Using SQLite database');
-    if (db.isMySQL) {
-      await initializeMySqlDatabase();
-    } else {
+// Initialize database and perform migrations/backfill only when running as a persistent server.
+// On serverless platforms (Vercel functions) we avoid heavy one-time work at import time
+// because it can cause cold-start failures or exceed runtime restrictions.
+function setupDatabaseForRuntime() {
+  const isServerless = !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
+
+  if (isServerless) {
+    console.log('ℹ️  Detected serverless environment — deferring DB migrations/backfill until runtime.');
+
+    // For serverless, do not perform migrations/backfill at import time.
+    // The app will use the database lazily on request; if a proper DB is required
+    // in production, configure a managed MySQL instance and set MYSQL_URL.
+    if (require.main === module) {
+      // If invoked directly (rare in serverless), still start the server.
+      startServer();
+    }
+
+    return;
+  }
+
+  // Non-serverless: perform full initialization synchronously at startup.
+  db.ready
+    .then(async () => {
+      console.log(db.isMySQL ? '✅ Connected to MySQL database' : '📦 Using SQLite database');
+      if (db.isMySQL) {
+        await initializeMySqlDatabase();
+      } else {
+        initializeDatabase();
+      }
+      if (require.main === module) {
+        startServer();
+      }
+    })
+    .catch((err) => {
+      if (!db.isMySQL) {
+        console.error('Error opening SQLite database:', err);
+        process.exit(1);
+      }
+      console.warn('⚠️  MySQL connection failed, switching to SQLite...');
+      console.log('📦 Using SQLite for local development');
       initializeDatabase();
-    }
-    if (require.main === module) {
-      startServer();
-    }
-  })
-  .catch((err) => {
-    // If MySQL fails, silently fall back to SQLite
-    if (!db.isMySQL) {
-      // SQLite failed - this is a real error
-      console.error('Error opening SQLite database:', err);
-      process.exit(1);
-    }
-    // MySQL failed - fall back to SQLite for local development
-    console.warn('⚠️  MySQL connection failed, switching to SQLite...');
-    console.log('📦 Using SQLite for local development');
-    initializeDatabase();
-    if (require.main === module) {
-      startServer();
-    }
-  });
+      if (require.main === module) {
+        startServer();
+      }
+    });
+}
+
+setupDatabaseForRuntime();
 
 // Export the Express app for serverless wrappers and tests
 module.exports = app;
