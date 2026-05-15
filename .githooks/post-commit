@@ -1,0 +1,25 @@
+#!/bin/sh
+# Auto-push after each local commit.
+# This hook tries to push the current branch to `origin` if present,
+# otherwise to `new-origin` if present. It is conservative and will
+# skip pushing if neither remote exists.
+
+set -e
+
+BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+if [ -z "$BRANCH" ]; then
+  echo "[post-commit] Could not determine current branch; skipping push."
+  exit 0
+fi
+
+if git remote | grep -q '^origin$'; then
+  echo "[post-commit] Pushing branch $BRANCH to origin..."
+  git push origin "$BRANCH" || echo "[post-commit] Push to origin failed"
+elif git remote | grep -q '^new-origin$'; then
+  echo "[post-commit] Pushing branch $BRANCH to new-origin..."
+  git push new-origin "$BRANCH" || echo "[post-commit] Push to new-origin failed"
+else
+  echo "[post-commit] No 'origin' or 'new-origin' remote configured; skipping auto-push."
+fi
+
+exit 0
