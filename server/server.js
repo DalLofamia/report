@@ -166,6 +166,16 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(bodyParser.json());
 
+// Serve client build (if present) for combined Docker deployments
+const CLIENT_BUILD_PATH = path.join(__dirname, '..', 'build');
+if (fs.existsSync(CLIENT_BUILD_PATH)) {
+  app.use(express.static(CLIENT_BUILD_PATH));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api/')) return next();
+    res.sendFile(path.join(CLIENT_BUILD_PATH, 'index.html'));
+  });
+}
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', message: 'Server is running' });
